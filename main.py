@@ -2,21 +2,41 @@
 # pip install .\opencv_python-4.2.0-cp38-cp38-win32.whl
 # pip install pyautogui
 
-from pyautogui import locateOnScreen, click, screenshot, moveTo, scroll
+# todo: kaikki etäisyydet relatiivisiks
+
+from pyautogui import locateOnScreen, click, screenshot, moveTo
 import numpy
 import sys
 import time
 import random
 import os
 import cv2
-from pynput.mouse import Button, Controller
+
 
 def sleep(preciseSleepTime):
     humanizedSleepTime = 1.0 * preciseSleepTime * random.uniform(0.9, 1.1)
     #print('sleeping for', humanizedSleepTime)
     time.sleep(humanizedSleepTime)
 
-def fail(reason):
+def logOut():
+    print('logOut() called..')
+    click(blueStacksTopLeftCorner[0]+1070+random.randrange(15),\
+          blueStacksTopLeftCorner[1]+600+random.randrange(15))
+    sleep(1)
+    click(blueStacksTopLeftCorner[0]+855+random.randrange(1000-855),\
+          blueStacksTopLeftCorner[1]+570+random.randrange(600-570))
+
+def hibernateComputer():
+    print('hibernateComputer() called..')
+    click(5, 5)
+    sleep(3)
+    click(5, 800, button='right')
+    sleep(3)
+    click(10, 650)
+    sleep(1)
+    click(10, 650)
+
+def fail(reason, onlyPrintStats=False):
     runTime = time.time() - startTime
     if runTime > 60*60:
         runTime = str(int(runTime/60/60)) + ' hours'
@@ -25,6 +45,11 @@ def fail(reason):
     else:
         runTime = str(int(runTime)) + ' seconds'
     stats = '\n\nScript ran for ' + runTime + ' and managed to kill ' + str(mobsKilled) + ' Cows\n\n'
+
+    if not onlyPrintStats:
+        logOut()
+        hibernateComputer()
+
     exitReason = stats + 'ERROR: '+ reason
     sys.exit(exitReason)
 
@@ -35,10 +60,15 @@ def getBlueStacksLocation():
 
     mainIcon = locateOnScreen('images/BlueStacksMainIcon.png')
     backIcon = locateOnScreen('images/BlueStacksBackIcon.png')
+
+    print(type(mainIcon))
+    print(mainIcon)
     
     if not (widthShouldBe == backIcon.left - mainIcon.left):
+        print(widthShouldBe, "!=", backIcon.left - mainIcon.left)
         fail('BlueStacks window has odd width, re-check options and restart the program')
     elif not (heightShouldBe == backIcon.top - mainIcon.top):
+        print(heightShouldBe, "!=", backIcon.top - mainIcon.top)
         fail('BlueStacks window has odd height, re-check options and restart the program')
     else:
         print('found a properly sized BlueStacks window at', mainIcon.top, mainIcon.left)
@@ -63,143 +93,140 @@ def tryScreenshot(imagePath, region):
         except:
             pass
 
-def clickImage(mobImages, startThreshold, minThreshold, step, clickCenter):
+def clickImage(mobImages, threshold, clickCenter):
     print('clickImage() called..', end='', flush=True)
 
-    currentThreshold = startThreshold
-    while currentThreshold > minThreshold:
-        print('.', end='', flush=True)
-        #print('finding mob with threshold ==', currentThreshold)
+    mobBoxRegion = (mobBox['topLeft'][0],\
+                    mobBox['topLeft'][1],\
+                    mobBox['bottomRight'][0] - mobBox['topLeft'][0],\
+                    mobBox['bottomRight'][1] - mobBox['topLeft'][1])
+    print('.', end='', flush=True)
 
-        #print('taking screenshot of the mobBox..')
-        mobBoxRegion = (mobBox['topLeft'][0],\
-                        mobBox['topLeft'][1],\
-                        mobBox['bottomRight'][0] - mobBox['topLeft'][0],\
-                        mobBox['bottomRight'][1] - mobBox['topLeft'][1])
-        tryScreenshot('tmp/screenshot.png', region=mobBoxRegion)
+    tryScreenshot('tmp/screenshot.png', region=mobBoxRegion)
+    mobBoxImage = cv2.imread('tmp/screenshot.png')
 
-        mobBoxImage = cv2.imread('tmp/screenshot.png')
-
-        imageNum = 1
-        for mobImage in mobImages:
+    imageNum = 1
+    for mobImage in mobImages:
+        if imageNum % 3 == 0:
+            tryScreenshot('tmp/screenshot.png', region=mobBoxRegion)
+            mobBoxImage = cv2.imread('tmp/screenshot.png')
+            print('s', end='', flush=True)
+        else:
             print('.', end='', flush=True)
-            #print('searching for image number', imageNum)
-            imageNum = imageNum + 1
+    
+        
+        imageNum = imageNum + 1
 
-            mobWidth = len(mobImage[0])
-            mobHeight = len(mobImage)
+        mobWidth = len(mobImage[0])
+        mobHeight = len(mobImage)
 
-            res = cv2.matchTemplate(mobBoxImage, mobImage, cv2.TM_CCOEFF_NORMED)
-            loc = numpy.where(res > currentThreshold)
-            #print('len(loc[0]) ==', len(loc[0]))
-            if len(loc[0]) > 0:
-                print(imageNum, end='', flush=True)
-                #print(loc)
-                middleIndex = int(len(loc[0]) / 2)
-                #print(middleIndex)
-                #tryScreenshot('tmp/possibleMob.png', region=(mobBox['topLeft'][0] + loc[1][middleIndex],\
-                #                                          mobBox['topLeft'][1] + loc[0][middleIndex],\
-                #                                          mobWidth,\
-                #                                          mobHeight))
-                possibleMobLocationCenter = (mobBox['topLeft'][0] + loc[1][middleIndex] + int(mobWidth/2),\
-                                             mobBox['topLeft'][1] + loc[0][middleIndex] + int(mobHeight/2))
+        res = cv2.matchTemplate(mobBoxImage, mobImage, cv2.TM_CCOEFF_NORMED)
+        loc = numpy.where(res > threshold)
+        
+        if len(loc[0]) > 0:
+            middleIndex = int(len(loc[0]) / 2)
+            possibleMobLocationCenter = (mobBox['topLeft'][0] + loc[1][middleIndex] + int(mobWidth/2),\
+                                            mobBox['topLeft'][1] + loc[0][middleIndex] + int(mobHeight/2))
 
-                if clickCenter == True:
-                    click(possibleMobLocationCenter)
-                else:
-                    click(possibleMobLocationCenter[0] + random.randrange(mobWidth),\
-                          possibleMobLocationCenter[1] + random.randrange(mobHeight))
-                print('')
-                return True
-        currentThreshold = currentThreshold * step
-        #print('mob not found')
+            if clickCenter == True:
+                click(possibleMobLocationCenter)
+            else:
+                click(possibleMobLocationCenter[0] + random.randrange(mobWidth),\
+                        possibleMobLocationCenter[1] + random.randrange(mobHeight))
+            print('')
+            return True
+            
     print('')
     return False
 
 
 def xpIconShowing(xpImage):
-    xpIconRegion = (mobBox['topLeft'][0] + 637,\
-                    mobBox['topLeft'][1] + 20,\
-                    9,\
-                    6)
+    xpIconRegion = (mobBox['topLeft'][0] + 600,\
+                    mobBox['topLeft'][1] - 30,\
+                    100,\
+                    100)
     tryScreenshot('tmp/xpIconRegion.png', region=xpIconRegion)
     xpIconBoxImage = cv2.imread('tmp/xpIconRegion.png')
     res = cv2.matchTemplate(xpIconBoxImage, xpImage, cv2.TM_CCOEFF_NORMED)
-    loc = numpy.where(res > 0.9)
+    loc = numpy.where(res > 0.95)
     return len(loc[0]) > 0
+    
 
-def setZoom():
-    click(blueStacksTopLeftCorner[0] + 900 + random.randrange(10), blueStacksTopLeftCorner[1] + 60 + random.randrange(10))
-    sleep(1)
-    moveTo(blueStacksTopLeftCorner[0] + 700 + random.randrange(10), blueStacksTopLeftCorner[1] + 500 + random.randrange(10))
-    mouse = Controller()
-    for i in range(10):
-        sleep(0.5)
-        mouse.scroll(0, 1)
-    print('zoom set')
+def runToMiddleOfField(treeImage):
+    minimapRegion = (mobBox['topLeft'][0] + 860,\
+                    mobBox['topLeft'][1] - 35,\
+                    190,\
+                    190)
+    tryScreenshot('tmp/minimapRegion.png', region=minimapRegion)
+    minimapBoxImage = cv2.imread('tmp/minimapRegion.png')
+    res = cv2.matchTemplate(minimapBoxImage, treeImage, cv2.TM_CCOEFF_NORMED)
+    loc = numpy.where(res > 0.80)
+    if len(loc[0] > 0):
+        click(minimapRegion[0] + loc[1][0] + 15,\
+              minimapRegion[1] + loc[0][0] + 110)
+    else:
+        fail('recovery attempt failed')
 
-# todo: send mail
 
 if __name__ == '__main__':
     try:
+        timeout = 1
+
         mobBox = {}
         cowThresholds = []
         cowTextThresholds = []
         startTime = time.time()
         xpIconLastSeen = time.time()
         mobsKilled = 0
+        recoveryAttempted = False
+
         blueStacksTopLeftCorner = getBlueStacksLocation()
 
-        #setZoom()
-
+        click(blueStacksTopLeftCorner[0], blueStacksTopLeftCorner[1])
         mobBox['topLeft'] = (blueStacksTopLeftCorner[0] + 50,\
                             blueStacksTopLeftCorner[1] + 90)
         mobBox['bottomRight'] = (blueStacksTopLeftCorner[0] + 830,\
                                 blueStacksTopLeftCorner[1] + 650)
-        swordXpImage = getImages('SwordXpIcon')[0]
-        cowImages = getImages('Cow')
+
+        treeImage = getImages('MinimapTree')[0]
+        cowImages = getImages('Cow') #WolfMinotaur
         cowTextImage = getImages('AttackCowText')
 
-        # v testing
-        while True:
-            if xpIconShowing(swordXpImage):
-                print('xp bar showing')
-            else:
-                print('xp bar NOT showing')
-            sleep(0.2)
-        # ^ testing
-
+        #xpImage = getImages('StrXpIcon')
+        xpImage = getImages('SwordXpIcon')[0]
 
         while True:
             timeSinceXpIcon = time.time() - xpIconLastSeen
 
-            if timeSinceXpIcon > 120:
-                fail('2 minutes passed since XP icon has been seen')
+            if timeSinceXpIcon > (timeout * 60):
+                if recoveryAttempted == True:
+                    fail(timeout, 'minute(s) passed since XP icon has been seen')
+                else:
+                    runToMiddleOfField(treeImage)
+                    recoveryAttempted = True
+
             
             print(int(timeSinceXpIcon), 'seconds passed since XP icon last seen')
 
-            if clickImage(cowImages, startThreshold=0.7, minThreshold=0.6, step=0.95, clickCenter=True):
-            #if clickImage(cowTextImage, startThreshold=0.9, minThreshold=0.8, step=0.99, clickCenter=False):
-                #print('waiting for a maximum of 3 seconds for combat to start..')
+            if clickImage(cowImages, threshold=0.57, clickCenter=True):
                 waitTicks = 0
                 print('waiting for combat to start..', end='', flush=True)
-                while not xpIconShowing(swordXpImage) and waitTicks < 20:
+                while not xpIconShowing(xpImage) and waitTicks < 20:
                     print('.', end='', flush=True)
                     sleep(0.1)
-                    #print("waiting", waitTicks)
                     waitTicks = waitTicks + 1
                 print('')
                 if waitTicks >= 20:
-                    #print('combat did not start in 3 seconds, finding a new mob')
                     pass
                 else:
                     print('waiting for combat to end..', end='', flush=True)
-                    while xpIconShowing(swordXpImage):
+                    while xpIconShowing(xpImage):
                         xpIconLastSeen = time.time()
+                        recoveryAttempted = False
                         print('.', end='', flush=True)
                         sleep(0.1)
                     mobsKilled = mobsKilled + 1
                     print('')
 
-    except KeyboardInterrupt:
-        fail('keyboard interrupt captured')
+    except:
+        fail('some failure', onlyPrintStats=True)
