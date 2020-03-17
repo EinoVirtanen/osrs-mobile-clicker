@@ -154,7 +154,7 @@ if __name__ == '__main__':
         mobClicksWithoutCombat = 0
         startTime = time.time()
         while True:
-            if mobClicksWithoutCombat > 10:
+            if mobClicksWithoutCombat > 5:
                 fail('10 clicks without combat, exiting!')
             if not xpIconShowing(xpImage):
                 # TODO: jos ukko joutuu oven taakse, nosta thresholdia 0.01
