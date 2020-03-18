@@ -1,4 +1,5 @@
 ### TODO
+- .gitignore:en tmp/
 - poista color clicker hakemisto thinkpadilta
 - poista color clicker hakemisto pöytäkoneelta
 - hibernatea ei tartte ku toi kone menee hibernatee itestää, eli poista se
